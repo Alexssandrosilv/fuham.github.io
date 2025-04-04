@@ -1,0 +1,720 @@
+---
+title: "RELATÓRIO - ANÁLISE DE DISCRIMINANTE (AD)" # -----> Título
+subtitle: "IEE034 - INTRODUÇÃO AO RECONHECIMENTO ESTATÍSTICO DE PADRÕES" # -----> Subtítulo
+format: 
+  html: 
+    toc: true               # Índice
+    html-math-method: katex # suporte a matemática
+    toc-location: right     # Localização do índice
+    number-sections: true   # Número das seções
+    code-fold: true         # Colapsar códigos
+    fontsize: 0.9em
+    #linestretch: 1.7 # Espaçamento entre as linhas
+    max-width: 8000em
+    margin-left: 0em  # Espaçamento de 2em na margem esquerda
+    margin-right: 0em # Espaçamento de 2em na margem direita
+    margin-bottom: 0em
+    margin-top: -1em
+    #df_print: paged
+    #highlight: espresso
+    #smooth_scroll: TRUE
+    theme: 
+      light: [flatly] # Tema modo claro
+      dark: [cyborg]  # Tema modo escuro
+title-block-banner: true
+
+editor: visual
+---
+
+## Autor
+
+| Aluno (a)                     | Matrícula  |
+|-------------------------------|------------|
+| Alexssandro da Silva Oliveira | 219.512-61 |
+
+```{r setup, include=FALSE}
+# Define opções globais para os blocos de código
+knitr::opts_chunk$set(
+  warning = FALSE,  # Evita que mensagens de aviso (warnings) apareçam na saída
+  message = FALSE,  # Evita que mensagens geradas por pacotes apareçam na saída
+  include = TRUE,   # Garante que o bloco de código e sua saída sejam incluídos no relatório
+  echo = TRUE      # Mostra o código R nos blocos de saída (útil para relatórios didáticos)
+)
+```
+
+## Bibliotecas
+
+Este script configura o ambiente com as bibliotecas "pacotes" utilizados neste trabalho
+
+1.  Bibliotecas ausentes são instalados automaticamente.
+2.  Todos as bibliotecas são carregadas de forma eficiente.
+3.  Cada biblioteca é comentada para facilitar a consulta sobre seu uso e aplicabilidade.
+
+```{r}
+# Lista de pacotes necessários, organizados por funcionalidade
+pacotes <- c(
+  # Conjuntos de dados e recursos didáticos
+  "datasetsICR",   # Conjuntos de dados para análises estatísticas
+  "ISLR",          # Recursos do livro "Introduction to Statistical Learning in R"
+  
+  # Manipulação e organização de dados
+  "dplyr",         # Ferramentas para manipulação de dados
+  "tidyr",         # Organização de dados no formato "tidy"
+  "magrittr",      # Operador pipe (%>%) para encadeamento de funções
+  
+  # Estatísticas descritivas e psicometria
+  "skimr",         # Resumos estatísticos descritivos
+  "psych",         # Resumos estatísticos descritivos
+  
+  # Testes estatísticos e normalidade
+  "MVN",           # Testes de normalidade multivariada e ferramentas auxiliares
+  "RVAideMemoire", # Testes de normalidade multivariada e ferramentas auxiliares
+  
+  # Modelagem estatística e regressão
+  "glmnet",        # Modelos lineares generalizados e regressão penalizada
+  "pls",           # Regressão de mínimos quadrados parciais e PCA
+  
+  # Visualização de dados
+  "ggplot2",       # Criação de gráficos estatísticos customizáveis
+  "corrplot",      # Visualização de matrizes de correlação
+  
+  # Criação e personalização de tabelas
+  "reactable",     # Construção de tabelas interativas
+  "flextable"      # Criação e personalização de tabelas para relatórios
+)
+
+# Verifica e instala pacotes ausentes
+pacotes_nao_instalados <- pacotes[!pacotes %in% installed.packages()]
+if (length(pacotes_nao_instalados) > 0) {
+  install.packages(pacotes_nao_instalados, dependencies = TRUE)
+}
+
+# Carrega todos os pacotes
+sapply(pacotes, require, character.only = TRUE) 
+
+```
+
+## Sobre os Dados
+
+**Pacote:** [datasetsICR](https://cran.r-project.org/web/packages/datasetsICR/datasetsICR.pdf)
+
+```{r}
+# Importação da Base de Dados:
+data("seeds")         # Carrega o conjunto de dados seeds diretamente
+bd <- na.omit(seeds)  # Remove qualquer linha com valores ausentes
+
+# Vetor com os nomes das variáveis traduzidos para português
+nomes <- c("área", "perímetro", "compactação", "comprimento do grão", 
+           "largura do grão", "coeficiente de assimetria", 
+           "comprimento do sulco do grão", "variedade")
+
+# Renomeando as variáveis do banco de dados com os novos nomes
+colnames(bd) <- nomes
+
+
+```
+
+**Formato:** data.frame contendo 210 observações (linhas) e 8 variáveis (colunas), sendo uma delas uma variável de classificação.
+
+**Descrição:** Medições das propriedades geométricas dos grãos pertencentes a três diferentes variedades de trigo.
+
+**Definindo as variáveis:**
+
+| Variável | Descrição | Tipo | Classe |   |
+|----|----|----|----|----|
+| $x_1$ | área | Quantitativa (contínua) | numérica |  |
+| $x_2$ | perímetro | Quantitativa (contínua) | numérica |  |
+| $x_3$ | compactação | Quantitativa (contínua) | numérica |  |
+| $x_4$ | comprimento do grão | Quantitativa (contínua) | numérica |  |
+| $x_5$ | largura do grão | Quantitativa (contínua) | numérica |  |
+| $x_6$ | coeficiente de assimetria | Quantitativa (contínua) | numérica |  |
+| $x_7$ | comprimento do sulco do grão | Quantitativa (contínua) | numérica |  |
+| **Variável** | **Descrição** | **Tipo** | **Classe** | **Níveis** |
+| $x_8$ | variedade | Qualitativa | Fator | 3 (Kama, Rosa e Canadian) |
+
+### Visualizando os dados
+
+```{r}
+# Visualizando os dados de forma interativa com a função 'reactable' da biblioteca 'reactable'
+# Esta função cria uma tabela interativa que permite a pesquisa
+reactable(bd,
+          # Adicionando uma barra de pesquisa
+          searchable = TRUE,
+          # Opções de tamanho de página
+          showPageSizeOptions = TRUE,
+          # Opções de número de linhas por página
+          pageSizeOptions = c(10, 25, 50),  # Define as opções de número de linhas por página
+          defaultPageSize = 10,  # Número inicial de linhas
+          # Redimensionamento das colunas
+          resizable = TRUE,
+          # Deixa a tabela mais compacta
+          compact = TRUE,
+          # Ocultar informações da página
+          showPageInfo = FALSE,
+          # Paginas
+          pagination = TRUE,
+          # Tipos alternativos de paginação
+          paginationType = "jump",
+          # Estilo da tabela
+          bordered = TRUE,  # Adiciona bordas à tabela
+          striped = FALSE,   # Linhas alternadas com cores
+          highlight = TRUE   # Destaca a linha selecionada
+)
+
+
+```
+
+## Análise Exploratória Descritiva
+
+```{r}
+
+# Função para gerar a tabela uma tabela personalizada contendo a análise descritiva
+resumo_est <- function(dados,nomes) {
+
+# A função describe da biblioteca psych gera uma análise descritiva detalhada 
+# dos dados, incluindo medidas de tendência central, dispersão, e assimetria
+descritiva <- round(data.frame(psych::describe(dados)[,-c(1,6,7)]),3)
+
+
+# Resumo completo
+resumo <- cbind(nomes[-8],descritiva)
+
+# Renomeando as colunas
+colnames(resumo) <- c("Variáveis","n", "Média", "Desvio\nPadrão", "Med.", "Mín.", "Máx.", 
+                      "Amplitude", "Coeficiente\nAssimetria", "Curtose", "Erro\nPadrão")
+
+# Gerando uma tabela personalizada contendo a análise descritiva
+# usando a função 'flextable' do pacote 'flextable'
+tabela <- flextable::flextable(resumo) %>%
+  # Define a fonte como "Arial" para toda a tabela
+  font(fontname = "Arial", part = "all") %>%
+  
+  # Ajusta o tamanho da fonte para 10
+  fontsize(size = 10) %>%
+    
+  # Define a largura das colunas, especificando valores individuais para cada uma
+  width(width = c(2.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5)) %>%
+    
+  # Ajusta a altura das linhas para 0.4
+  height(height = 0.4) %>%
+    
+  # Centraliza o conteúdo no cabeçalho
+  align(align = "center", part = "header") %>%
+    
+  # Centraliza o conteúdo no corpo da tabela
+  align(align = "center", part = "body") %>%
+    
+  # Alinha o conteúdo da primeira coluna à esquerda, mantendo o alinhamento central para as demais
+  align(j = c(1), align = "left", part = "body")
+
+  return(tabela) # Retorna o valor
+}
+
+# Aplicação
+resumo_est(bd[-8],nomes)
+
+```
+
+### Análise Exploratória Descritiva por nível da variável fator
+
+### Kama
+
+```{r}
+# População 1
+Kama <- bd[bd$variedade == "Kama",][-8]
+
+# Tabela personalizada contendo a análise descritiva
+resumo_est(Kama,nomes)
+```
+
+### Rosa
+
+```{r}
+# População 2
+Rosa <- bd[bd$variedade == "Rosa",][-8]
+
+# Tabela personalizada contendo a análise descritiva
+resumo_est(Rosa,nomes)
+```
+
+### Canadian
+
+```{r}
+# População 3
+Canadian <- bd[bd$variedade == "Canadian",][-8]
+
+# Tabela personalizada contendo a análise descritiva
+resumo_est(Canadian,nomes)
+```
+
+\textbf{Comentários:} As Tabelas exibem a análise descritiva das populações em estudo e alguns resultados importantes para o nosso contexto. Esses resultados incluem o tamanho amostral, denotado por $n$ = 70 para cada grupo, ou seja os dados são balanceados, $P(\theta)$ = 0.33, que indicam as probabilidades a priori de uma observação ser classificada em uma determinada população antes de qualquer técnica de estimação, e as médias de cada variável nas respectivas populações. Com base nos valores médios, podemos determinar quais variáveis serão mais úteis na discriminação entre as populações, sendo aquelas com valores médios significativamente diferentes as mais eficazes. Essa análise das médias facilita a identificação das variáveis mais relevantes para a classificação correta das observações.
+
+## Verificando Normalidade
+
+### Testes de Normalidade (Univariado)
+
+\vspace{0.3cm}
+
+Foram realizados os seguintes testes para cada grupo:
+
+\vspace{0.3cm}
+
+1.  Shapiro-Wilk (Ideal para amostras pequenas)
+2.  Anderson-Darling (Ideal para amostras maiores)
+
+\vspace{0.3cm}
+
+Onde as hipóteses dos testes são dadas por:
+
+\vspace{0.3cm}
+
+$$H_{0}: \text{Dados provém de uma distribuição } N(\mu,\sigma^{2}) $$
+
+$$H_{1}: \text{Diferente de } H_{0}  $$
+
+\vspace{0.3cm}
+
+```{r}
+# Shapiro-Wilk
+TSW_Kama <- MVN::mvn(Kama, mvnTest = "royston",univariateTest = "SW") 
+TSW_Rosa <- MVN::mvn(Rosa, mvnTest = "royston",univariateTest = "SW") 
+TSW_Canadian <- MVN::mvn(Canadian, mvnTest = "royston",univariateTest = "SW") 
+
+# Anderson-Darling
+TAD_Kama <- MVN::mvn(Rosa, mvnTest = "royston",univariateTest = "AD") 
+TAD_Rosa <- MVN::mvn(Kama, mvnTest = "royston",univariateTest = "AD") 
+TAD_Canadian <- MVN::mvn(Canadian, mvnTest = "royston",univariateTest = "AD") 
+
+# Tabela com resultados dos teste de normalidade univariado
+resultados <- data.frame(
+  nomes = nomes[-8],
+  SW1 <- TSW_Kama$univariateNormality[4],
+  SW2 <- TSW_Rosa$univariateNormality[4],
+  SW4 <- TSW_Canadian$univariateNormality[4],
+  AD1 <- TAD_Kama$univariateNormality[4],
+  AD2 <- TAD_Rosa$univariateNormality[4],
+  AD3 <- TAD_Canadian$univariateNormality[4]
+)
+
+# Transformando todas as colunas (exceto "nomes") para o tipo numérico
+resultados[-1] <- lapply(resultados[-1], as.numeric)
+
+# Renomeando as colunas
+colnames(resultados) <- c("Variáveis","Shapiro-Wilk (P1)",
+                          "Anderson-Darling (P1)",
+                          "Shapiro-Wilk (P2)",
+                          "Anderson-Darling (P2)",
+                          "Shapiro-Wilk (P3)",
+                          "Anderson-Darling (P3)")
+
+# Gerando uma tabela personalizada contendo os resultados
+# usando a função 'flextable' do pacote 'flextable'
+tabela <- flextable::flextable(resultados) %>%
+  # Define a fonte como "Arial" para toda a tabela
+  font(fontname = "Arial", part = "all") %>%
+  
+  # Ajusta o tamanho da fonte para 10
+  fontsize(size = 9) %>%
+  
+  # Ajusta o tamanho do cabeçalho fonte para 9
+  fontsize(part = "header", size = 9) %>%
+  
+  # Define a largura das colunas, especificando valores individuais para cada uma
+  width(width = c(2.5, 1.2, 1.4, 1.2, 1.4, 1.2, 1.4)) %>%
+  
+  # Ajusta a altura das linhas para 0.4
+  height(height = 0.4) %>%
+  
+  # Centraliza o conteúdo no cabeçalho
+  align(align = "center", part = "header") %>%
+  
+  # Centraliza o conteúdo no corpo da tabela
+  align(align = "center", part = "body") %>%
+  
+  # Alinhando a primeira linha da tabela a esquerda
+  align(j = c(1), align = "left", part = "body") %>%
+  
+  # Adicionando novas linhas com informações dos testes na tabalea
+  add_header_row(,colwidths = c(1, 2, 2, 2),values = c("","P1: Kama","P2: Rosa","P3: Canadian")) %>%
+  
+  # Destaca os valores p menores que 0.05
+  # Aplica cor vermelha e negrito nas células de acordo com a condição < 0.05
+  color(i = which(resultados[, "Shapiro-Wilk (P1)"] < 0.05), color = "red", part = "body", j = 2) %>%
+  bold(i = which(resultados[, "Shapiro-Wilk (P1)"] < 0.05), part = "body", j = 2) %>%
+  
+  color(i = which(resultados[, "Anderson-Darling (P1)"] < 0.05), color = "red", part = "body", j = 3) %>%
+  bold(i = which(resultados[, "Anderson-Darling (P1)"] < 0.05), part = "body", j = 3) %>%
+  
+  color(i = which(resultados[, "Shapiro-Wilk (P2)"] < 0.05), color = "red", part = "body", j = 4) %>%
+  bold(i = which(resultados[, "Shapiro-Wilk (P2)"] < 0.05), part = "body", j = 4) %>%
+  
+  color(i = which(resultados[, "Anderson-Darling (P2)"] < 0.05), color = "red", part = "body", j = 5) %>%
+  bold(i = which(resultados[, "Anderson-Darling (P2)"] < 0.05), part = "body", j = 5) %>%
+  
+  color(i = which(resultados[, "Shapiro-Wilk (P3)"] < 0.05), color = "red", part = "body", j = 6) %>%
+  bold(i = which(resultados[, "Shapiro-Wilk (P3)"] < 0.05), part = "body", j = 6) %>%
+  
+  color(i = which(resultados[, "Anderson-Darling (P3)"] < 0.05), color = "red", part = "body", j = 7) %>%
+  bold(i = which(resultados[, "Anderson-Darling (P3)"] < 0.05), part = "body", j = 7)
+
+# Exibindo a tabela
+tabela
+
+
+
+```
+
+Valores-p (p-valor) Kinferiores ao nível de significância $\alpha$ = 0.05 foram destacados de vermelho, que indicam a rejeição de $H_0:$ Hipótese nula.
+
+### Testes de Normalidade (Bivariado)
+
+Foi realizado o teste de normalidade bivariado de Shapiro-Wilk de Royston para cada grupo
+
+\vspace{0.3cm}
+
+Onde as hipótese do teste e dada por:
+
+\vspace{0.3cm}
+
+$$H_{0}: (X_{i},X_{j}) \sim N_2 (\mu,\Sigma) $$
+
+$$H_{1}: \text{Diferente de } H_{0}  $$
+
+Tal que:
+
+-   $i \neq j$ $\quad$ (onde $i$ e $j$ são os índices de cada variável)
+
+-   $\mu = \begin{bmatrix}
+                  \mu_1 \\
+                  \mu_2
+                  \end{bmatrix}$ é um vetor de médias $(\mu)$
+
+-   $\Sigma = \begin{bmatrix}
+     \sigma_1^2 & \sigma_{12} \\
+     \sigma_{12} & \sigma_2^2
+     \end{bmatrix}$ é a Matriz de covariância $(\Sigma)$
+
+Iremos verificar quais distribuições conjuntas seguem distribuição normal bivariada $N(\mu,\sigma)$ de tal forma que valores-p (p-valor) inferiores ao nível de significância $\alpha$ = 0.05 foram destacados de vermelho, que indicam a rejeição de $H_0:$ Hipótese nula.
+
+```{r}
+# Matriz nula para armazenar os p-valores
+n <- 7 # Número de variáveis
+resultados <- matrix("", nrow = n, ncol = n, 
+                     dimnames = list(paste0("x", 1:n), paste0("x", 1:n)))
+
+# Loop para preencher os p-valores
+for (j in 1:(n - 1)) {
+  for (i in (j + 1):n) {
+    # Criar os dados com o par de variáveis
+    dados <- data.frame(Kama[, j], Kama[, i])
+    
+    # Realizando o teste de normalidade bivariado
+    teste <- RVAideMemoire::mshapiro.test(dados)
+    
+    # Extrair e arredondar o p-valor
+    pvalor <- round(teste$p.value, 4)
+    
+    # Adicionar o p-valor na matriz
+    resultados[i, j] <- pvalor
+  }
+}
+
+# Visualizar a tabela de resultados
+# print(resultados, quote = FALSE)
+resultados[upper.tri(resultados)] <- t(resultados)[upper.tri(resultados)] 
+
+# Coluna com os nomes das variaveis
+Pares <- c("x1","x2","x3","x4","x5","x6","x7")
+
+# Dataframe completo
+resultados <- as.data.frame(cbind(Pares,resultados))
+
+# Transformando todas as colunas (exceto "Pares") para o tipo numérico
+resultados[-1] <- lapply(resultados[-1], as.numeric)
+
+# Gerando uma tabela personalizada contendo os resultados
+# usando a função 'flextable' do pacote 'flextable'
+tabela <- flextable::flextable(resultados) %>%
+  # Define a fonte como "Arial" para toda a tabela
+  font(fontname = "Arial", part = "all") %>%
+  
+  # Ajusta o tamanho da fonte para 10
+  fontsize(size = 9) %>%
+  
+  # Ajusta o tamanho do cabeçalho fonte para 9
+  fontsize(part = "header", size = 9) %>%
+  
+  # Define a largura das colunas, especificando valores individuais para cada uma
+  width(width = c(2, 2, 2, 2, 2, 2, 2, 2)) %>%
+  
+  # Ajusta a altura das linhas para 0.4
+  height(height = 0.4) %>%
+  
+  # Centraliza o conteúdo no cabeçalho
+  align(align = "center", part = "header") %>%
+  
+  # Centraliza o conteúdo no corpo da tabela
+  align(align = "center", part = "body") %>%
+  
+  # Deixando a primeira linha (cabeçalho) em negrito
+  bold(i = c(1), part = "header") %>%
+
+  # Deixando a primeira coluna em negrito
+  bold(j = c(1), part = "body") %>%
+  
+  # Adicionando novas linhas com informações dos testes na tabalea
+  add_header_row(,colwidths = c(8),values = c("Matrix: Teste de Normalidade Bivariado Shapiro-Wilk de Royston (P1: Kama)")) %>%
+  
+  # Destaca os valores p menores que 0.05
+  # Aplica cor vermelha e negrito nas células de acordo com a condição < 0.05
+  color(i = which(resultados[, "x1"] < 0.05), color = "red", part = "body", j = 2) %>%
+  bold(i = which(resultados[, "x1"] < 0.05), part = "body", j = 2) %>%
+  
+  color(i = which(resultados[, "x2"] < 0.05), color = "red", part = "body", j = 3) %>%
+  bold(i = which(resultados[, "x2"] < 0.05), part = "body", j = 3) %>%
+  
+  color(i = which(resultados[, "x3"] < 0.05), color = "red", part = "body", j = 4) %>%
+  bold(i = which(resultados[, "x3"] < 0.05), part = "body", j = 4) %>%
+  
+  color(i = which(resultados[, "x4"] < 0.05), color = "red", part = "body", j = 5) %>%
+  bold(i = which(resultados[, "x4"] < 0.05), part = "body", j = 5) %>%
+  
+  color(i = which(resultados[, "x5"] < 0.05), color = "red", part = "body", j = 6) %>%
+  bold(i = which(resultados[, "x5"] < 0.05), part = "body", j = 6) %>%
+  
+  color(i = which(resultados[, "x6"] < 0.05), color = "red", part = "body", j = 7) %>%
+  bold(i = which(resultados[, "x6"] < 0.05), part = "body", j = 7) %>%
+  
+  color(i = which(resultados[, "x7"] < 0.05), color = "red", part = "body", j = 8) %>%
+  bold(i = which(resultados[, "x7"] < 0.05), part = "body", j = 8)
+
+# Exibindo a tabela
+tabela
+
+```
+
+```{r}
+# Matriz nula para armazenar os p-valores
+n <- 7 # Número de variáveis
+resultados <- matrix("", nrow = n, ncol = n, 
+                     dimnames = list(paste0("x", 1:n), paste0("x", 1:n)))
+
+# Loop para preencher os p-valores
+for (j in 1:(n - 1)) {
+  for (i in (j + 1):n) {
+    # Criar os dados com o par de variáveis
+    dados <- data.frame(Rosa[, j], Rosa[, i])
+    
+    # Realizando o teste de normalidade bivariado
+    teste <- RVAideMemoire::mshapiro.test(dados)
+    
+    # Extrair e arredondar o p-valor
+    pvalor <- round(teste$p.value, 4)
+    
+    # Adicionar o p-valor na matriz
+    resultados[i, j] <- pvalor
+  }
+}
+
+# Visualizar a tabela de resultados
+# print(resultados, quote = FALSE)
+resultados[upper.tri(resultados)] <- t(resultados)[upper.tri(resultados)] 
+
+# Coluna com os nomes das variaveis
+Pares <- c("x1","x2","x3","x4","x5","x6","x7")
+
+# Dataframe completo
+resultados <- as.data.frame(cbind(Pares,resultados))
+
+# Transformando todas as colunas (exceto "Pares") para o tipo numérico
+resultados[-1] <- lapply(resultados[-1], as.numeric)
+
+# Gerando uma tabela personalizada contendo os resultados
+# usando a função 'flextable' do pacote 'flextable'
+tabela <- flextable::flextable(resultados) %>%
+  # Define a fonte como "Arial" para toda a tabela
+  font(fontname = "Arial", part = "all") %>%
+  
+  # Ajusta o tamanho da fonte para 10
+  fontsize(size = 9) %>%
+  
+  # Ajusta o tamanho do cabeçalho fonte para 9
+  fontsize(part = "header", size = 9) %>%
+  
+  # Define a largura das colunas, especificando valores individuais para cada uma
+  width(width = c(2, 2, 2, 2, 2, 2, 2, 2)) %>%
+  
+  # Ajusta a altura das linhas para 0.4
+  height(height = 0.4) %>%
+  
+  # Centraliza o conteúdo no cabeçalho
+  align(align = "center", part = "header") %>%
+  
+  # Centraliza o conteúdo no corpo da tabela
+  align(align = "center", part = "body") %>%
+  
+  # Deixando a primeira linha (cabeçalho) em negrito
+  bold(i = c(1), part = "header") %>%
+
+  # Deixando a primeira coluna em negrito
+  bold(j = c(1), part = "body") %>%
+  
+  # Adicionando novas linhas com informações dos testes na tabalea
+  add_header_row(,colwidths = c(8),values = c("Matrix: Teste de Normalidade Bivariado Shapiro-Wilk de Royston (P2: Rosa)")) %>%
+  
+  # Destaca os valores p menores que 0.05
+  # Aplica cor vermelha e negrito nas células de acordo com a condição < 0.05
+  color(i = which(resultados[, "x1"] < 0.05), color = "red", part = "body", j = 2) %>%
+  bold(i = which(resultados[, "x1"] < 0.05), part = "body", j = 2) %>%
+  
+  color(i = which(resultados[, "x2"] < 0.05), color = "red", part = "body", j = 3) %>%
+  bold(i = which(resultados[, "x2"] < 0.05), part = "body", j = 3) %>%
+  
+  color(i = which(resultados[, "x3"] < 0.05), color = "red", part = "body", j = 4) %>%
+  bold(i = which(resultados[, "x3"] < 0.05), part = "body", j = 4) %>%
+  
+  color(i = which(resultados[, "x4"] < 0.05), color = "red", part = "body", j = 5) %>%
+  bold(i = which(resultados[, "x4"] < 0.05), part = "body", j = 5) %>%
+  
+  color(i = which(resultados[, "x5"] < 0.05), color = "red", part = "body", j = 6) %>%
+  bold(i = which(resultados[, "x5"] < 0.05), part = "body", j = 6) %>%
+  
+  color(i = which(resultados[, "x6"] < 0.05), color = "red", part = "body", j = 7) %>%
+  bold(i = which(resultados[, "x6"] < 0.05), part = "body", j = 7) %>%
+  
+  color(i = which(resultados[, "x7"] < 0.05), color = "red", part = "body", j = 8) %>%
+  bold(i = which(resultados[, "x7"] < 0.05), part = "body", j = 8)
+
+# Exibindo a tabela
+tabela
+
+```
+
+```{r}
+# Matriz nula para armazenar os p-valores
+n <- 7 # Número de variáveis
+resultados <- matrix("", nrow = n, ncol = n, 
+                     dimnames = list(paste0("x", 1:n), paste0("x", 1:n)))
+
+# Loop para preencher os p-valores
+for (j in 1:(n - 1)) {
+  for (i in (j + 1):n) {
+    # Criar os dados com o par de variáveis
+    dados <- data.frame(Canadian[, j], Canadian[, i])
+    
+    # Realizando o teste de normalidade bivariado
+    teste <- RVAideMemoire::mshapiro.test(dados)
+    
+    # Extrair e arredondar o p-valor
+    pvalor <- round(teste$p.value, 4)
+    
+    # Adicionar o p-valor na matriz
+    resultados[i, j] <- pvalor
+  }
+}
+
+# Visualizar a tabela de resultados
+# print(resultados, quote = FALSE)
+resultados[upper.tri(resultados)] <- t(resultados)[upper.tri(resultados)] 
+
+# Coluna com os nomes das variaveis
+Pares <- c("x1","x2","x3","x4","x5","x6","x7")
+
+# Dataframe completo
+resultados <- as.data.frame(cbind(Pares,resultados))
+
+# Transformando todas as colunas (exceto "Pares") para o tipo numérico
+resultados[-1] <- lapply(resultados[-1], as.numeric)
+
+# Gerando uma tabela personalizada contendo os resultados
+# usando a função 'flextable' do pacote 'flextable'
+tabela <- flextable::flextable(resultados) %>%
+  # Define a fonte como "Arial" para toda a tabela
+  font(fontname = "Arial", part = "all") %>%
+  
+  # Ajusta o tamanho da fonte para 10
+  fontsize(size = 9) %>%
+  
+  # Ajusta o tamanho do cabeçalho fonte para 9
+  fontsize(part = "header", size = 9) %>%
+  
+  # Define a largura das colunas, especificando valores individuais para cada uma
+  width(width = c(2, 2, 2, 2, 2, 2, 2, 2)) %>%
+  
+  # Ajusta a altura das linhas para 0.4
+  height(height = 0.4) %>%
+  
+  # Centraliza o conteúdo no cabeçalho
+  align(align = "center", part = "header") %>%
+  
+  # Centraliza o conteúdo no corpo da tabela
+  align(align = "center", part = "body") %>%
+  
+  # Deixando a primeira linha (cabeçalho) em negrito
+  bold(i = c(1), part = "header") %>%
+
+  # Deixando a primeira coluna em negrito
+  bold(j = c(1), part = "body") %>%
+  
+  # Adicionando novas linhas com informações dos testes na tabalea
+  add_header_row(,colwidths = c(8),values = c("Matrix: Teste de Normalidade Bivariado Shapiro-Wilk de Royston (P3: Canadian)")) %>%
+  
+  # Destaca os valores p menores que 0.05
+  # Aplica cor vermelha e negrito nas células de acordo com a condição < 0.05
+  color(i = which(resultados[, "x1"] < 0.05), color = "red", part = "body", j = 2) %>%
+  bold(i = which(resultados[, "x1"] < 0.05), part = "body", j = 2) %>%
+  
+  bold(i = which(resultados[, "x2"] < 0.05), part = "body", j = 3) %>%
+  color(i = which(resultados[, "x2"] < 0.05), color = "red", part = "body", j = 3) %>%
+  
+  color(i = which(resultados[, "x3"] < 0.05), color = "red", part = "body", j = 4) %>%
+  bold(i = which(resultados[, "x3"] < 0.05), part = "body", j = 4) %>%
+  
+  color(i = which(resultados[, "x4"] < 0.05), color = "red", part = "body", j = 5) %>%
+  bold(i = which(resultados[, "x4"] < 0.05), part = "body", j = 5) %>%
+  
+  color(i = which(resultados[, "x5"] < 0.05), color = "red", part = "body", j = 6) %>%
+  bold(i = which(resultados[, "x5"] < 0.05), part = "body", j = 6) %>%
+  
+  color(i = which(resultados[, "x6"] < 0.05), color = "red", part = "body", j = 7) %>%
+  bold(i = which(resultados[, "x6"] < 0.05), part = "body", j = 7) %>%
+  
+  color(i = which(resultados[, "x7"] < 0.05), color = "red", part = "body", j = 8) %>%
+  bold(i = which(resultados[, "x7"] < 0.05), part = "body", j = 8)
+
+# Exibindo a tabela
+tabela
+
+```
+
+## Regras de Classificação (Caso Paramétrico)
+
+Técnica estatística utilizada para encontrar combinações (lineares ou quadráticas) de características que maximizem a separação entre diferentes grupos ou classes, em outras palavras queremos classificar elementos de uma amostra ou população, os pressupostos requerem que os grupos para os quais cada elemento pode ser classificado sejam definidos a priori (conhecidos), sendo necessário para que a classificação seja feita com base nas características de cada população.
+
+### Escore Quadrático de Discriminação
+
+### Função discriminante de Fisher
+
+## Estratégias para estimar as regras
+
+### Ressubstituição
+
+### Validação Cruzada - Leave-one-out
+
+### Holdout - divisão da amostra em treino e teste
+
+### k-fold
+
+## Avaliação das regras
+
+### Matriz de confusão
+
+### Acurácia
+
+### Taxa de erro aparente (total)
+
+## Regras de Classificação (Caso Paramétrico)
+
+### KNN
+
+### Comparar os métodos
